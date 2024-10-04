@@ -1,7 +1,5 @@
-export type ChangeEventPayload = {
-  value: string;
-};
-
-export type ExpoSyncMediaViewProps = {
-  name: string;
+export type PersistentChanges = {
+	nextToken: string;
+	insertedIds: string[];
+	deletedIds: string[];
 };

@@ -1,44 +1,55 @@
 import ExpoModulesCore
+import Photos
 
 public class ExpoSyncMediaModule: Module {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
-  public func definition() -> ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('ExpoSyncMedia')` in JavaScript.
-    Name("ExpoSyncMedia")
-
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants([
-      "PI": Double.pi
-    ])
-
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
-
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      return "Hello world! 👋"
+    // Each module class must implement the definition function. The definition consists of components
+    // that describes the module's functionality and behavior.
+    // See https://docs.expo.dev/modules/module-api for more details about available components.
+    public func definition() -> ModuleDefinition {
+        // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
+        // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
+        // The module will be accessible from `requireNativeModule('ExpoSyncMedia')` in JavaScript.
+        Name("ExpoSyncMedia")
+        
+        AsyncFunction("fetchPersistentChanges") { (since: String?) in
+            if #available(iOS 16, *) {
+                let photoLibrary = PHPhotoLibrary.shared()
+                let token: PHPersistentChangeToken
+                
+                if let sinceToken = since, let data = Data(base64Encoded: sinceToken),
+                   let decodedToken = try? NSKeyedUnarchiver.unarchivedObject(ofClass: PHPersistentChangeToken.self, from: data) {
+                    token = decodedToken
+                } else {
+                    token = photoLibrary.currentChangeToken
+                }
+                
+                
+                var insertedIds = []
+                var deletedIds = []
+                // var updateds = []
+                
+                for change in try photoLibrary.fetchPersistentChanges(since: token){
+                    let changeDetails = try change.changeDetails(for: PHObjectType.asset)
+                    
+                    changeDetails.insertedLocalIdentifiers.forEach { insertedIds.append($0) }
+                    changeDetails.deletedLocalIdentifiers.forEach { deletedIds.append($0) }
+                    // changeDetails.updatedLocalIdentifiers.forEach {updateds.append($0)}
+                }
+                
+                do {
+                    let nextToken = try NSKeyedArchiver.archivedData(withRootObject: photoLibrary.currentChangeToken, requiringSecureCoding: true)
+                    
+                    return [
+                        "nextToken": nextToken.base64EncodedString(),
+                        "insertedIds": insertedIds,
+                        "deletedIds": deletedIds
+                    ]
+                } catch {
+                    throw NSError(domain: "ExpoSyncMediaModule", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize token: \(error.localizedDescription)"])
+                }
+            } else {
+                throw NSError(domain: "ExpoSyncMediaModule", code: 1, userInfo: [NSLocalizedDescriptionKey: "This feature is only available on iOS 16 and later."])
+            }
+        }
     }
-
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { (value: String) in
-      // Send an event to JavaScript.
-      self.sendEvent("onChange", [
-        "value": value
-      ])
-    }
-
-    // Enables the module to be used as a native view. Definition components that are accepted as part of the
-    // view definition: Prop, Events.
-    View(ExpoSyncMediaView.self) {
-      // Defines a setter for the `name` prop.
-      Prop("name") { (view: ExpoSyncMediaView, prop: String) in
-        print(prop)
-      }
-    }
-  }
 }
