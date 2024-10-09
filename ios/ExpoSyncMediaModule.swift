@@ -23,17 +23,22 @@ public class ExpoSyncMediaModule: Module {
                     token = photoLibrary.currentChangeToken
                 }
                 
-                
                 var insertedIds = []
                 var deletedIds = []
                 // var updateds = []
-                
-                for change in try photoLibrary.fetchPersistentChanges(since: token){
-                    let changeDetails = try change.changeDetails(for: PHObjectType.asset)
-                    
-                    changeDetails.insertedLocalIdentifiers.forEach { insertedIds.append($0) }
-                    changeDetails.deletedLocalIdentifiers.forEach { deletedIds.append($0) }
-                    // changeDetails.updatedLocalIdentifiers.forEach {updateds.append($0)}
+                do {
+                    for change in try photoLibrary.fetchPersistentChanges(since: token) {
+                        let changeDetails = try change.changeDetails(for: PHObjectType.asset)
+                        
+                        changeDetails.insertedLocalIdentifiers.forEach { insertedIds.append($0) }
+                        changeDetails.deletedLocalIdentifiers.forEach { deletedIds.append($0) }
+                        // changeDetails.updatedLocalIdentifiers.forEach {updateds.append($0)}
+                    }
+                } catch {
+                    if let photosError = error as? PHPhotosError, photosError.code == .persistentChangeTokenExpired {
+                        throw PersistentChangesTokenExpiredException()
+                    }
+                    throw error
                 }
                 
                 do {
@@ -52,4 +57,10 @@ public class ExpoSyncMediaModule: Module {
             }
         }
     }
+}
+
+internal class PersistentChangesTokenExpiredException: Exception {
+  override var reason: String {
+    "The provided persistent changes token is expired"
+  }
 }
